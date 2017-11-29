@@ -20,8 +20,8 @@ namespace tsst_client
         public const int PORT_NUMBER_SIZE = 4;
         static Socket output_socket = null;
         static Socket inputSocket = null;
-        Message messageOut = new Message();
-        Message messageIn = new Message();
+        Packet messageOut;
+        Packet messageIn;
         private int inPort;
         private int outPort;
         private int outCounter;
@@ -59,7 +59,7 @@ namespace tsst_client
             SendMessage(messageOut);
         }
 
-        private void SendMessage(Message packet)              //Wysyłanie. Wysyła określoną liczbę pakietów co określony odstęp czasu. 
+        private void SendMessage(Packet packet)              //Wysyłanie. Wysyła określoną liczbę pakietów co określony odstęp czasu. 
         {
             string random_meassage;
             Thread thread;
@@ -68,7 +68,7 @@ namespace tsst_client
                 for (int i = 1; i <= Int32.Parse(nb_of_m_tb.Text); i++)
                 {
                     random_meassage = message_tb.Text + RandomString();
-                    packet = new Message(random_meassage, Int32.Parse(textBox2.Text), Int32.Parse(textBox1.Text), GetTimeStamp(), "I1");
+                    packet = new Packet(random_meassage,"", "", outPort, 0, GetTimeStamp(), "I1");
                     if (output_socket.Connected)
                     {
                         int serializedObjectSize = GetSerializedMessage(packet).Length;
@@ -77,10 +77,11 @@ namespace tsst_client
                         byte[] portNumber = BitConverter.GetBytes(outPort);
                         output_socket.Send(mSize);
                         output_socket.Send(portNumber);
-                        output_socket.Send(GetSerializedMessage(packet));
+                        byte[] serializedData = GetSerializedMessage(packet);
+                        output_socket.Send(serializedData);
                         logs_list.Invoke(new Action(delegate ()
                         {
-                        logs_list.Items.Add(++inCounter + ": " + dataSize + "|" + packet.s + " | " + packet.output_port + " | " + packet.timestamp);
+                        logs_list.Items.Add(++inCounter + ": " + dataSize + "|" + packet.s + " | " + packet.sourcePort + " | " + packet.timestamp);
                             logs_list.SelectedIndex = logs_list.Items.Count - 1;
                         }));
 
@@ -92,7 +93,7 @@ namespace tsst_client
             thread.Start();
         }
 
-        private void SendSingleMessage(Message sm)
+        private void SendSingleMessage(Packet sm)
         {
             Thread tr;
             tr = new Thread(() =>
@@ -107,7 +108,7 @@ namespace tsst_client
                 output_socket.Send(GetSerializedMessage(sm));
                 logs_list.Invoke(new Action(delegate ()
                 {
-                    logs_list.Items.Add(": " + sm.s + " | " + sm.output_port + " | " + sm.timestamp);
+                    logs_list.Items.Add(": " + sm.s + " | " + sm.sourcePort + " | " + sm.timestamp);
                     logs_list.SelectedIndex = logs_list.Items.Count - 1;
                 }));
             }
@@ -162,7 +163,7 @@ namespace tsst_client
                 messageIn = GetDeserializedMessage(bytes);
                 receive_logs_list.Invoke(new Action(delegate ()
                 {
-                    receive_logs_list.Items.Add(outCounter + ": " + messageSize + "|" + messageIn.s + " | " + messageIn.output_port + " | " + messageIn.timestamp);
+                    receive_logs_list.Items.Add(outCounter + ": " + messageSize + "|" + messageIn.s + " | " + messageIn.sourcePort + " | " + messageIn.timestamp);
                     receive_logs_list.SelectedIndex = receive_logs_list.Items.Count - 1;
                 }));
             }
@@ -171,7 +172,7 @@ namespace tsst_client
             outCounter++;
 
         }
-        private byte[] GetSerializedMessage(Message mes)
+        private byte[] GetSerializedMessage(Packet mes)
         {
             BinaryFormatter bf = new BinaryFormatter();
             MemoryStream ms = new MemoryStream();
@@ -179,14 +180,14 @@ namespace tsst_client
             return ms.ToArray();
         }
 
-        private Message GetDeserializedMessage(byte[] b)
+        private Packet GetDeserializedMessage(byte[] b)
         {
-            Message m = new Message();
+            Packet m = null; 
             MemoryStream memStream = new MemoryStream();
             BinaryFormatter binForm = new BinaryFormatter();
             memStream.Write(b, 0, b.Length);
             memStream.Seek(0, SeekOrigin.Begin);
-            m = (Message)binForm.Deserialize(memStream);
+            m = (Packet)binForm.Deserialize(memStream);
             return m;
         }
 
