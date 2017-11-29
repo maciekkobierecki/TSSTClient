@@ -3,11 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using tsst_client;
 
 namespace tsst_client
 {
     [Serializable]
-    class Packet
+    public class Packet
     {
         public string s;
         public int destinationPort;
