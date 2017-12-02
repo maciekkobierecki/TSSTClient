@@ -27,6 +27,7 @@ namespace tsst_client
         private int outCounter;
         private int inCounter;
 
+
         public Form1()
         {
             InitializeComponent();
@@ -68,20 +69,21 @@ namespace tsst_client
                 for (int i = 1; i <= Int32.Parse(nb_of_m_tb.Text); i++)
                 {
                     random_meassage = message_tb.Text + RandomString();
-                    packet = new Packet(random_meassage,"", "", outPort, 0, GetTimeStamp(), "I1");
+                    packet = new Packet(random_meassage,"P", "", outPort, 0, GetTimeStamp(), "I1");
                     if (output_socket.Connected)
                     {
                         int serializedObjectSize = GetSerializedMessage(packet).Length;
-                        int dataSize = serializedObjectSize + PORT_NUMBER_SIZE;
+                        int dataSize = serializedObjectSize + 2*PORT_NUMBER_SIZE;
                         byte[] mSize = BitConverter.GetBytes(dataSize);
                         byte[] portNumber = BitConverter.GetBytes(outPort);
+                        output_socket.Send(mSize);
                         output_socket.Send(mSize);
                         output_socket.Send(portNumber);
                         byte[] serializedData = GetSerializedMessage(packet);
                         output_socket.Send(serializedData);
                         logs_list.Invoke(new Action(delegate ()
                         {
-                        logs_list.Items.Add(++inCounter + ": " + dataSize + "|" + packet.s + " | " + packet.sourcePort + " | " + packet.timestamp);
+                        logs_list.Items.Add(++inCounter + "|" + packet.s + " | " + packet.timestamp);
                             logs_list.SelectedIndex = logs_list.Items.Count - 1;
                         }));
 
@@ -91,29 +93,6 @@ namespace tsst_client
             }
             );
             thread.Start();
-        }
-
-        private void SendSingleMessage(Packet sm)
-        {
-            Thread tr;
-            tr = new Thread(() =>
-            {
-                Connect();
-                if (sm._interface == "I1")             //
-                    sm._interface = "I2";              //do usunięcia (testy)
-                else if (sm._interface == "I2")        //
-                    sm._interface = "I3";
-                else
-                    sm._interface = "I1";
-                output_socket.Send(GetSerializedMessage(sm));
-                logs_list.Invoke(new Action(delegate ()
-                {
-                    logs_list.Items.Add(": " + sm.s + " | " + sm.sourcePort + " | " + sm.timestamp);
-                    logs_list.SelectedIndex = logs_list.Items.Count - 1;
-                }));
-            }
-            );
-            tr.Start();
         }
 
         private void Listen()      
@@ -154,6 +133,7 @@ namespace tsst_client
             int messageSize;
             messageSize = ReceiveDataSize();
             RemoveSourcePortNumberFromData();
+            RemoveSourcePortNumberFromData();
             int decreased = DecreaseDataSizeByPortNumber(messageSize);
             byte[] bytes = new byte[messageSize];
             int readByte = inputSocket.Receive(bytes, 0, decreased, SocketFlags.None);
@@ -163,7 +143,7 @@ namespace tsst_client
                 messageIn = GetDeserializedMessage(bytes);
                 receive_logs_list.Invoke(new Action(delegate ()
                 {
-                    receive_logs_list.Items.Add(outCounter + ": " + messageSize + "|" + messageIn.s + " | " + messageIn.sourcePort + " | " + messageIn.timestamp);
+                    receive_logs_list.Items.Add(outCounter +  "|" + messageIn.s +  " | " + messageIn.timestamp);
                     receive_logs_list.SelectedIndex = receive_logs_list.Items.Count - 1;
                 }));
             }
@@ -174,10 +154,13 @@ namespace tsst_client
         }
         private byte[] GetSerializedMessage(Packet mes)
         {
-            BinaryFormatter bf = new BinaryFormatter();
-            MemoryStream ms = new MemoryStream();
+            BinaryFormatter bf;
+            MemoryStream ms;
+            ms = new MemoryStream();
+            bf = new BinaryFormatter();
             bf.Serialize(ms, mes);
-            return ms.ToArray();
+            byte[] bytes = ms.ToArray();
+            return bytes;
         }
 
         private Packet GetDeserializedMessage(byte[] b)

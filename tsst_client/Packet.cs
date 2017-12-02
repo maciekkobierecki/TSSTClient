@@ -30,6 +30,17 @@ namespace tsst_client
             this._interface = _in;
         }
 
+        public Packet(Packet copyingPacket)
+        {
+            s = copyingPacket.s;
+            destinationPort = copyingPacket.destinationPort;
+            sourcePort = copyingPacket.sourcePort;
+            destinationAddress = copyingPacket.destinationAddress;
+            sourceAddress = copyingPacket.sourceAddress;
+            timestamp = copyingPacket.timestamp;
+            _interface = copyingPacket._interface;
+        }
+
 
 
     }
