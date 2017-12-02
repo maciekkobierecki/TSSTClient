@@ -57,11 +57,12 @@ namespace tsst_client
 
         private void send_Click(object sender, EventArgs e)
         {
-            SendMessage(messageOut);
+            SendMessage();
         }
 
-        private void SendMessage(Packet packet)              //Wysyłanie. Wysyła określoną liczbę pakietów co określony odstęp czasu. 
+        private void SendMessage()              //Wysyłanie. Wysyła określoną liczbę pakietów co określony odstęp czasu. 
         {
+            Packet packet = null;
             string random_meassage;
             Thread thread;
             thread = new Thread(async () =>
@@ -69,7 +70,7 @@ namespace tsst_client
                 for (int i = 1; i <= Int32.Parse(nb_of_m_tb.Text); i++)
                 {
                     random_meassage = message_tb.Text + RandomString();
-                    packet = new Packet(random_meassage,"P", "", outPort, 0, GetTimeStamp(), "I1");
+                    packet = new Packet(random_meassage,destinationTextBox.Text, "", outPort, 0, GetTimeStamp(), "I1");
                     if (output_socket.Connected)
                     {
                         int serializedObjectSize = GetSerializedMessage(packet).Length;
@@ -137,18 +138,9 @@ namespace tsst_client
             int decreased = DecreaseDataSizeByPortNumber(messageSize);
             byte[] bytes = new byte[messageSize];
             int readByte = inputSocket.Receive(bytes, 0, decreased, SocketFlags.None);
-            Thread t;
-            t = new Thread(() =>
-            {
-                messageIn = GetDeserializedMessage(bytes);
-                receive_logs_list.Invoke(new Action(delegate ()
-                {
-                    receive_logs_list.Items.Add(outCounter +  "|" + messageIn.s +  " | " + messageIn.timestamp);
-                    receive_logs_list.SelectedIndex = receive_logs_list.Items.Count - 1;
-                }));
-            }
-            );
-            t.Start();
+            messageIn = GetDeserializedMessage(bytes);
+            receive_logs_list.Items.Add(outCounter +  "|" + messageIn.s +  " | " + messageIn.timestamp);
+            receive_logs_list.SelectedIndex = receive_logs_list.Items.Count - 1;
             outCounter++;
 
         }
@@ -165,7 +157,8 @@ namespace tsst_client
 
         private Packet GetDeserializedMessage(byte[] b)
         {
-            Packet m = null; 
+            Packet m = null;
+            b[0] = 1;
             MemoryStream memStream = new MemoryStream();
             BinaryFormatter binForm = new BinaryFormatter();
             memStream.Write(b, 0, b.Length);
