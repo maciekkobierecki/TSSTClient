@@ -50,7 +50,7 @@ namespace tsst_client
 
         private void button1_Click(object sender, EventArgs e)
         {
-
+            button1.Enabled = false;
             Connect();
             if (!backgroundWorker1.IsBusy)
             {
