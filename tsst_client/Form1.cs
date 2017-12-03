@@ -18,14 +18,17 @@ namespace tsst_client
     public partial class Form1 : Form
     {
         public const int PORT_NUMBER_SIZE = 4;
+        public const int INTEGER_SIZE = 4;
+        public const String SEND_FUNCTION = "send";
+        public const String RECEIVE_FUNCTION = "receive";
         static Socket output_socket = null;
         static Socket inputSocket = null;
-        Packet messageOut;
         Packet messageIn;
         private int inPort;
         private int outPort;
         private int outCounter;
         private int inCounter;
+        private int sendingDelay;
 
 
         public Form1()
@@ -35,12 +38,12 @@ namespace tsst_client
             inCounter = 0;
         }
 
-        private void Connect()                  //Połączenie
+        private void Connect()
         {
             output_socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             IPAddress ipAdd = IPAddress.Parse("127.0.0.1");
             outPort = Int32.Parse(textBox1.Text);
-            IPEndPoint remoteEP = new IPEndPoint(ipAdd, outPort); //Int32.Parse(ConfigurationManager.AppSettings["output_port"]));
+            IPEndPoint remoteEP = new IPEndPoint(ipAdd, outPort);
             output_socket.Connect(remoteEP);
 
         }
@@ -57,43 +60,77 @@ namespace tsst_client
 
         private void send_Click(object sender, EventArgs e)
         {
-            SendMessage();
+            ProcessUIOrder();
+            sendingDelay = Int32.Parse(delay_tb.Text);
         }
 
-        private void SendMessage()              //Wysyłanie. Wysyła określoną liczbę pakietów co określony odstęp czasu. 
+        private void ProcessUIOrder() 
+        {
+            Thread thread;
+            thread = new Thread(() => sendPackets());
+            thread.Start();
+        }
+
+        private void sendPackets()
         {
             Packet packet = null;
-            string random_meassage;
-            Thread thread;
-            thread = new Thread(async () =>
+            for (int i = 1; i <= Int32.Parse(nb_of_m_tb.Text); i++)
             {
-                for (int i = 1; i <= Int32.Parse(nb_of_m_tb.Text); i++)
+                packet = NextPacket();
+                if (output_socket.Connected)
                 {
-                    random_meassage = message_tb.Text + RandomString();
-                    packet = new Packet(random_meassage,destinationTextBox.Text, "", outPort, 0, GetTimeStamp(), "I1");
-                    if (output_socket.Connected)
-                    {
-                        int serializedObjectSize = GetSerializedMessage(packet).Length;
-                        int dataSize = serializedObjectSize + 2*PORT_NUMBER_SIZE;
-                        byte[] mSize = BitConverter.GetBytes(dataSize);
-                        byte[] portNumber = BitConverter.GetBytes(outPort);
-                        output_socket.Send(mSize);
-                        output_socket.Send(mSize);
-                        output_socket.Send(portNumber);
-                        byte[] serializedData = GetSerializedMessage(packet);
-                        output_socket.Send(serializedData);
-                        logs_list.Invoke(new Action(delegate ()
-                        {
-                        logs_list.Items.Add(++inCounter + "|" + packet.s + " | " + packet.timestamp);
-                            logs_list.SelectedIndex = logs_list.Items.Count - 1;
-                        }));
+                    byte[] serializedMessage = SerializePacket(packet);
+                    int serializedObjectSize = serializedMessage.Length;
+                    int dataSize = serializedObjectSize + 2 * PORT_NUMBER_SIZE;
+                    byte[] sizeOfData = ConvertToByteArray(dataSize);
+                    byte[] portNumber = ConvertToByteArray(outPort);
+                    Send(sizeOfData, portNumber, portNumber, serializedMessage);
+                    updateUI(SEND_FUNCTION, inCounter, packet);
 
-                    }
-                    await Task.Delay(Int32.Parse(delay_tb.Text));
                 }
+                Thread.Sleep(sendingDelay);
             }
-            );
-            thread.Start();
+        }
+
+        private Packet NextPacket()
+        {
+            string random_meassage;
+            random_meassage = message_tb.Text + RandomString();
+            Packet packet=new Packet(random_meassage, destinationTextBox.Text, "", outPort, 0, GetTimeStamp(), "I1");
+            return packet;
+        }
+        
+        private byte[] ConvertToByteArray(int number)
+        {
+            byte[] converted = BitConverter.GetBytes(number);
+            return converted;
+        }
+        private void Send(byte[] dataSize, byte[] destinationPort, byte[] sourcePort, byte[] serializedPacket)
+        {
+            output_socket.Send(dataSize);
+            output_socket.Send(destinationPort);
+            output_socket.Send(sourcePort);
+            output_socket.Send(serializedPacket);
+        }
+
+        private void updateUI(String function,int inCounter, Packet packet)
+        {
+            ListBox updatingListBox = GetProperListBox(function);
+            updatingListBox.Invoke(new Action(delegate ()
+            {
+                updatingListBox.Items.Add(++inCounter + "|" + packet.s + " | " + packet.timestamp);
+                updatingListBox.SelectedIndex = updatingListBox.Items.Count - 1;
+            }));
+        }
+
+        private ListBox GetProperListBox(String function)
+        {
+            if (function.Equals(SEND_FUNCTION))
+                return logs_list;
+            else if (function.Equals(RECEIVE_FUNCTION))
+                return receive_logs_list;
+            else
+                return null;
         }
 
         private void Listen()      
@@ -101,7 +138,7 @@ namespace tsst_client
             inputSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             IPAddress ipAdd = IPAddress.Parse("127.0.0.1");
             inPort = Int32.Parse(textBox2.Text);
-            IPEndPoint remoteEP = new IPEndPoint(ipAdd, inPort); //Int32.Parse(ConfigurationManager.AppSettings["input_port"]));
+            IPEndPoint remoteEP = new IPEndPoint(ipAdd, inPort);
             inputSocket.Connect(remoteEP);
             while (true)
             {
@@ -111,21 +148,21 @@ namespace tsst_client
 
         private int ReceiveDataSize()
         {
-            byte[] objectSize = new byte[4];
-            inputSocket.Receive(objectSize, 0, 4, SocketFlags.None);
+            byte[] objectSize = new byte[INTEGER_SIZE];
+            inputSocket.Receive(objectSize, 0, INTEGER_SIZE, SocketFlags.None);
             int messageSize = BitConverter.ToInt32(objectSize, 0);
             return messageSize;
         }
 
         private void RemoveSourcePortNumberFromData()
         {
-            byte[] bytes = new byte[4];
+            byte[] bytes = new byte[PORT_NUMBER_SIZE];
             inputSocket.Receive(bytes, 0, 4, SocketFlags.None);
         }
 
         private int DecreaseDataSizeByPortNumber(int numberToDecrease)
         {
-            int decreased = numberToDecrease - 4;
+            int decreased = numberToDecrease - 2*PORT_NUMBER_SIZE;
             return decreased;
         }
 
@@ -136,15 +173,27 @@ namespace tsst_client
             RemoveSourcePortNumberFromData();
             RemoveSourcePortNumberFromData();
             int decreased = DecreaseDataSizeByPortNumber(messageSize);
-            byte[] bytes = new byte[messageSize];
-            int readByte = inputSocket.Receive(bytes, 0, decreased, SocketFlags.None);
-            messageIn = GetDeserializedMessage(bytes);
-            receive_logs_list.Items.Add(outCounter +  "|" + messageIn.s +  " | " + messageIn.timestamp);
-            receive_logs_list.SelectedIndex = receive_logs_list.Items.Count - 1;
+            byte[] bytes;
+            bytes = ReceiveData(decreased);
+            messageIn = DeserializePacket(bytes);
             outCounter++;
-
+            updateUI(RECEIVE_FUNCTION, outCounter, messageIn);
         }
-        private byte[] GetSerializedMessage(Packet mes)
+
+        private byte[] ReceiveData(int inputSize)
+        {
+            byte[] bytes = new byte[inputSize];
+            int totalReceived = 0;
+            do
+            {
+                int received = inputSocket.Receive(bytes, totalReceived, inputSize - totalReceived, SocketFlags.Partial);
+                totalReceived += received;
+            } while (totalReceived != inputSize);
+
+            return bytes;
+        }
+
+        private byte[] SerializePacket(Packet mes)
         {
             BinaryFormatter bf;
             MemoryStream ms;
@@ -155,7 +204,7 @@ namespace tsst_client
             return bytes;
         }
 
-        private Packet GetDeserializedMessage(byte[] b)
+        private Packet DeserializePacket(byte[] b)
         {
             Packet m = null;
             b[0] = 1;
@@ -201,7 +250,7 @@ namespace tsst_client
             }
         }
 
-        private string RandomString()       //Dokleja randomowego stringa z tej puli o randomowej długości z danego przedziału (tak ma być)
+        private string RandomString()     
         {
             Random random = new Random();
             int string_length = random.Next(1, 5);
