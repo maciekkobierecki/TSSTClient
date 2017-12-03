@@ -85,6 +85,7 @@ namespace tsst_client
                     byte[] sizeOfData = ConvertToByteArray(dataSize);
                     byte[] portNumber = ConvertToByteArray(outPort);
                     Send(sizeOfData, portNumber, portNumber, serializedMessage);
+                    inCounter++;
                     updateUI(SEND_FUNCTION, inCounter, packet);
 
                 }
@@ -113,12 +114,12 @@ namespace tsst_client
             output_socket.Send(serializedPacket);
         }
 
-        private void updateUI(String function,int inCounter, Packet packet)
+        private void updateUI(String function,int counter, Packet packet)
         {
             ListBox updatingListBox = GetProperListBox(function);
             updatingListBox.Invoke(new Action(delegate ()
             {
-                updatingListBox.Items.Add(++inCounter + "|" + packet.s + " | " + packet.timestamp);
+                updatingListBox.Items.Add(counter + "|" + packet.s + " | " + packet.timestamp);
                 updatingListBox.SelectedIndex = updatingListBox.Items.Count - 1;
             }));
         }
